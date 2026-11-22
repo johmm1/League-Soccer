@@ -62,3 +62,19 @@ The following points were verified directly in the current source:
 - [ ] Trace resource-manager path resolution and database writes before selecting Android asset/storage integration.
 - [ ] Trace renderer thread ownership and SDL event loop before adding pause/resume handling.
 - [ ] Audit touch/HID dispatch before designing on-screen controls.
+
+
+## Shader and input audit (2026-11-22)
+
+- The shipped shader files use desktop GLSL `#version 150`. Android OpenGL ES 3 requires GLSL ES source (normally `#version 300 es`) and precision declarations where required.
+- The shaders use desktop-style fragment output declarations and a mixture of `texture2D` and newer `texture` calls. They need a deliberate ES shader variant/conversion and validation on a real GLES compiler; changing only the version line is not sufficient.
+- The renderer has several render passes (ambient/SSAO, lighting/shadows, overlay and postprocess). A basic context test will not validate these; the mobile renderer milestone should bring up the simplest scene first, then enable passes incrementally.
+- The keyboard HID implementation reads state through the engine's user-event manager. It is not a touch-control implementation. Android touch controls should inject virtual button/axis state through the same HID/gameplay input abstraction so gameplay logic remains shared.
+- The resource manager requests resources by filename and delegates to loaders; the actual asset-root/path resolution is managed elsewhere. Android asset loading and writable database/config paths must be handled separately rather than assuming desktop relative paths work inside an APK.
+
+## Updated risk order
+
+1. GLES renderer and shader compatibility are the largest technical blockers.
+2. Android build/dependency packaging and SDL Activity lifecycle are next.
+3. Asset/database path redirection and app-private persistence follow.
+4. Touch controls and low-end device performance tuning come after the game can render and run natively.
