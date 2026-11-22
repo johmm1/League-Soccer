@@ -78,3 +78,23 @@ The following points were verified directly in the current source:
 2. Android build/dependency packaging and SDL Activity lifecycle are next.
 3. Asset/database path redirection and app-private persistence follow.
 4. Touch controls and low-end device performance tuning come after the game can render and run natively.
+
+
+## Active renderer call-site inventory (2026-11-22)
+
+A scan of the complete 2,682-line `opengl_renderer3d.cpp` found these Android-relevant call sites:
+
+- Immediate-mode drawing is still present in active code, not just comments: `glBegin/glEnd`, `glVertex3f`, and `glColor3f/glColor4f` appear in sphere generation and both AABB debug-render paths. These must be converted to VBO/VAO-backed draws or excluded behind a deliberate debug-rendering option on Android.
+- The renderer calls `glClientActiveTexture`, which is not part of OpenGL ES 3. It must be replaced by explicit vertex attribute arrays.
+- The renderer uses `glMapBufferRange/glUnmapBuffer`; GLES 3 supports buffer mapping, but availability and flags must be checked against the actual NDK GLES headers and target API.
+- Multiple render targets are used through `glDrawBuffers`, and fragment output locations are assigned with `glBindFragDataLocation`. These require GLES 3-compatible usage and shader output binding rules.
+- The current pipeline requests floating-point render targets (including `GL_RGBA16F`), depth formats, depth comparison textures and framebuffer attachments. Each format/feature must be capability-checked on the Android GPU; unsupported optional effects need a fallback path.
+- The source calls `glClearDepth`; GLES uses `glClearDepthf`. The GL mapping layer needs a platform-specific wrapper rather than assuming desktop function signatures.
+- Frame capture/readback uses `glReadBuffer(GL_BACK)`, which is not a portable GLES path. Disable capture for Android's first milestone or use a GLES-safe framebuffer readback path.
+- The renderer binds fragment outputs by name before linking. GLES 3 supports explicit fragment output locations in shader source; the desktop binding call should not be assumed available in the same form.
+
+## Rendering strategy confirmed
+
+The engine already has a modern VBO/VAO path for its main geometry, so the mobile port should preserve that shared geometry pipeline. The legacy immediate-mode calls are concentrated in procedural helper/debug drawing, while the larger remaining work is the desktop GL mapping and render-target/shader pipeline. The next code change should be a narrow platform abstraction and GLES compile path, not a wholesale replacement of the match renderer.
+
+No C++ renderer changes have been committed yet. This inventory is a verified source audit, not a claim that the renderer is Android-ready.
