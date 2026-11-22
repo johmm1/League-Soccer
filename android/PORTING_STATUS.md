@@ -34,3 +34,31 @@ An APK is not considered complete merely because it installs. The Android build 
 ## Current state
 
 This is an engineering audit, not a claim that an Android build is already working. No Android APK has yet been produced or device-tested.
+
+
+## Detailed build-system and renderer audit (2026-11-22)
+
+The following points were verified directly in the current source:
+
+- The top-level CMake configuration calls `find_package(OpenGL REQUIRED)` before creating the game targets. This must be conditional: Android should link the NDK-provided GLESv3/EGL libraries and must not search for desktop OpenGL.
+- The current common include helper adds desktop OpenGL include directories to every object library. The Android path needs platform-specific include/link configuration rather than inheriting those variables.
+- The executable is currently named `gameplayfootball`; runtime data is copied beside that desktop executable by a post-build command. Android must package these files as application assets instead.
+- `OpenGLRenderer3D::CreateContext` creates an SDL desktop-style window and GL context, then loads the desktop function list from `sdl_glfuncs.h`. Android needs an SDL Android Activity-backed window and an ES context request (ES 3.x), with a GLES-only loader.
+- The renderer currently logs and checks desktop OpenGL major/minor versions. That check is not a valid GLES capability test and must be replaced with an ES version/extension check.
+- Frame capture currently uses desktop framebuffer/read-buffer constants and synchronous pixel readback. It should be disabled or implemented separately for Android rather than carried into the first mobile build.
+- SDL initialization currently requests video, joystick and game-controller subsystems together. Android lifecycle and input availability need explicit handling; the app must tolerate pause/resume and context loss.
+
+## Safe implementation decisions
+
+1. Keep the desktop renderer and desktop CMake path working. Do not globally replace OpenGL headers or function names.
+2. Introduce a separate Android/GLES renderer implementation behind the existing renderer interface, or perform a deliberate renderer refactor with compile-time platform separation. The choice must follow inspection of all renderer virtual methods and shader assets.
+3. First Android milestone is a native arm64 build that creates an ES context and displays a diagnostic scene. Only after that should the full 3D scene, menus, assets, and match loop be enabled.
+4. Do not report Android support until a real APK is produced and launched on an Android device.
+
+## Remaining source audit
+
+- [ ] Map all active fixed-function GL calls (not just commented examples) and identify which are reachable during startup/gameplay.
+- [ ] Inspect shader files for desktop GLSL versions and unsupported syntax.
+- [ ] Trace resource-manager path resolution and database writes before selecting Android asset/storage integration.
+- [ ] Trace renderer thread ownership and SDL event loop before adding pause/resume handling.
+- [ ] Audit touch/HID dispatch before designing on-screen controls.
